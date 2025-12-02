@@ -15,8 +15,8 @@ const loading = ref(false);
 const searched = ref(false); // Um "Kein Eintrag gefunden" nur nach Suche anzuzeigen
 
 // API-Konfiguration
-// Platzhalter [LXC-IP] wurde durch 10.3.0.182 ersetzt
-const API_BASE_URL = 'http://10.3.0.182:5000/api/barcode';
+// Wir nutzen nun den Proxy (in vite.config.js oder nginx.conf), um CORS-Fehler zu vermeiden
+const API_BASE_URL = '/api/barcode';
 
 // Suchfunktion
 const searchBarcode = async () => {
