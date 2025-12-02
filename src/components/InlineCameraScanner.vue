@@ -11,6 +11,9 @@
     </div>
 
     <div class="camera-controls">
+      <div v-if="needsUserGesture" class="start-control">
+        <Button label="Kamera starten" icon="pi pi-camera" class="p-button-primary" @click="startCameraFromUser" />
+      </div>
       <Button label="Schließen" icon="pi pi-times" class="p-button-secondary" @click="stop" />
     </div>
   </div>
@@ -35,8 +38,24 @@ export default {
     const errorMsg = ref('')
     const useHtml5 = ref(false)
     const useNative = ref(false)
+    const needsUserGesture = ref(false)
 
     async function startCamera () {
+      // Basic feature checks
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        supported.value = false
+        errorMsg.value = 'Camera streaming wird vom Browser nicht unterstützt.'
+        emit('error', new Error(errorMsg.value))
+        return
+      }
+
+      // Require secure context on non-localhost
+      if (!window.isSecureContext && location.hostname !== 'localhost') {
+        supported.value = false
+        errorMsg.value = 'Kamera benötigt eine sichere Verbindung (HTTPS).' 
+        emit('error', new Error(errorMsg.value))
+        return
+      }
       try {
         // Prefer native BarcodeDetector when available
         if ('BarcodeDetector' in window) {
@@ -176,14 +195,34 @@ export default {
     }
 
     onMounted(() => {
+      // Detect iOS Safari where a user gesture to open the camera is often required
+      const ua = navigator.userAgent || ''
+      const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      const isSafari = /^((?!chrome|android).)*safari/i.test(ua)
+      const isIosSafari = isIOS && isSafari
+
+      if (isIosSafari) {
+        // Show a button so the user can explicitly start the camera (user gesture)
+        needsUserGesture.value = true
+        supported.value = true
+        errorMsg.value = 'Auf iPhone/Safari bitte "Kamera starten" drücken.'
+        return
+      }
+
       startCamera()
     })
+
+    function startCameraFromUser () {
+      needsUserGesture.value = false
+      errorMsg.value = ''
+      startCamera()
+    }
 
     onBeforeUnmount(() => {
       stop()
     })
 
-    return { videoEl, html5El, supported, stop, useHtml5, useNative, errorMsg }
+    return { videoEl, html5El, supported, stop, useHtml5, useNative, errorMsg, needsUserGesture, startCameraFromUser }
   }
 }
 </script>
@@ -238,5 +277,11 @@ export default {
 .camera-controls {
   display: flex;
   justify-content: center;
+}
+
+.start-control {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
 }
 </style>
