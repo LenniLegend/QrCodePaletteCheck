@@ -1,12 +1,12 @@
 <script setup>
-import { ref, onUnmounted } from 'vue';
+import { ref } from 'vue';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Card from 'primevue/card';
 import Message from 'primevue/message';
 import ProgressSpinner from 'primevue/progressspinner';
 import FloatLabel from 'primevue/floatlabel';
-import QrScanner from 'qr-scanner';
+import InlineCameraScanner from './components/InlineCameraScanner.vue';
 
 // Reaktive Variablen
 const barcode = ref('');
@@ -15,7 +15,6 @@ const error = ref(null);
 const loading = ref(false);
 const searched = ref(false); // Um "Kein Eintrag gefunden" nur nach Suche anzuzeigen
 const showScanner = ref(false);
-let qrScanner = null;
 
 // API-Konfiguration
 // Wir nutzen nun den Proxy (in vite.config.js oder nginx.conf), um CORS-Fehler zu vermeiden
@@ -23,120 +22,29 @@ const API_BASE_URL = '/api/barcode';
 
 const version = __APP_VERSION__;
 
-// Prüfe ob wir HTTPS haben oder localhost (für getUserMedia erforderlich auf iOS)
-const isSecureContext = window.isSecureContext || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-// Prüfe ob iOS Safari
-const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-
 // QR-Code Scanner Funktion
-const scanQRCode = async () => {
+const scanQRCode = () => {
   error.value = null;
-  
-  // Für iOS ohne HTTPS oder wenn getUserMedia nicht verfügbar: verwende File Input
-  if (isIOS && (!isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
-    // File Input für iOS - öffnet native Kamera
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment';
-    
-    input.onchange = async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      
-      try {
-        // QR-Code aus Bild scannen
-        const result = await QrScanner.scanImage(file, { 
-          returnDetailedScanResult: true 
-        });
-        barcode.value = result.data;
-        await searchBarcode();
-      } catch (err) {
-        console.error('QR scan error:', err);
-        error.value = 'Kein QR-Code im Bild gefunden. Bitte versuche es erneut.';
-      }
-    };
-    
-    input.click();
-    return;
-  }
-  
-  // Für moderne Browser mit HTTPS: verwende Live-Scanner
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    error.value = 'Kamera-Zugriff nicht verfügbar. Bitte verwende HTTPS.';
-    return;
-  }
-  
-  try {
-    // Teste Kamera-Zugriff explizit - löst Berechtigung aus
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-      video: { facingMode: 'environment' } 
-    });
-    
-    // Stoppe Test-Stream sofort wieder
-    stream.getTracks().forEach(track => track.stop());
-    
-    // Jetzt Scanner UI anzeigen
-    showScanner.value = true;
-    
-    // Warte kurz, damit das Video-Element im DOM ist
-    await new Promise(resolve => setTimeout(resolve, 150));
-    
-    const videoElement = document.getElementById('qr-video');
-    if (!videoElement) {
-      error.value = 'Scanner konnte nicht initialisiert werden.';
-      showScanner.value = false;
-      return;
-    }
-    
-    // QR Scanner initialisieren
-    qrScanner = new QrScanner(
-      videoElement,
-      result => {
-        barcode.value = result.data;
-        stopScanner();
-        searchBarcode();
-      },
-      {
-        returnDetailedScanResult: true,
-        highlightScanRegion: true,
-        highlightCodeOutline: true,
-        preferredCamera: 'environment',
-        maxScansPerSecond: 5
-      }
-    );
-    
-    await qrScanner.start();
-  } catch (err) {
-    console.error('Scanner error:', err);
-    showScanner.value = false;
-    
-    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-      error.value = 'Kamera-Zugriff wurde verweigert. Bitte erlaube den Zugriff in den Einstellungen.';
-    } else if (err.name === 'NotFoundError') {
-      error.value = 'Keine Kamera gefunden.';
-    } else if (err.name === 'NotReadableError') {
-      error.value = 'Kamera wird bereits verwendet.';
-    } else {
-      error.value = 'Kamera konnte nicht gestartet werden: ' + (err.message || 'Unbekannter Fehler');
-    }
+  showScanner.value = true;
+};
+
+const onScanResult = (scanResult) => {
+  barcode.value = scanResult.payload || scanResult.raw || '';
+  showScanner.value = false;
+  if (barcode.value) {
+    searchBarcode();
   }
 };
 
-const stopScanner = () => {
-  if (qrScanner) {
-    qrScanner.stop();
-    qrScanner.destroy();
-    qrScanner = null;
-  }
+const onScanError = (err) => {
+  console.error('Scanner error:', err);
+  error.value = err && err.message ? err.message : 'Fehler beim Scannen';
   showScanner.value = false;
 };
 
-// Cleanup beim Unmount
-onUnmounted(() => {
-  stopScanner();
-});
+const onScannerClose = () => {
+  showScanner.value = false;
+};
 
 // Suchfunktion
 const searchBarcode = async () => {
@@ -293,24 +201,24 @@ const searchBarcode = async () => {
     </Card>
 
     <!-- QR-Code Scanner Overlay -->
-    <div v-if="showScanner" class="scanner-overlay" @click.self="stopScanner">
+    <div v-if="showScanner" class="scanner-overlay" @click.self="onScannerClose">
       <div class="scanner-container">
         <div class="scanner-header">
           <h3>QR-Code scannen</h3>
           <Button 
             icon="pi pi-times" 
-            @click="stopScanner" 
+            @click="onScannerClose" 
             class="close-scanner-button"
             text
             rounded
             severity="secondary"
           />
         </div>
-        <div class="scanner-video-wrapper">
-          <video id="qr-video" class="scanner-video"></video>
-          <div class="scanner-frame"></div>
-        </div>
-        <p class="scanner-hint">Halte den QR-Code in den Rahmen</p>
+        <InlineCameraScanner 
+          @scan-result="onScanResult" 
+          @error="onScanError"
+          @close="onScannerClose"
+        />
       </div>
     </div>
 
@@ -765,78 +673,37 @@ const searchBarcode = async () => {
   align-items: center;
   justify-content: center;
   animation: fadeIn 0.3s ease-out;
+  padding: 1rem;
 }
 
 .scanner-container {
-  width: 90%;
-  max-width: 500px;
+  width: 100%;
+  max-width: 600px;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 .scanner-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 1rem;
+  padding: 0 0.5rem;
 }
 
 .scanner-header h3 {
   color: white;
   margin: 0;
   font-size: 1.5rem;
+  font-weight: 600;
 }
 
 .close-scanner-button {
   color: white !important;
+  font-size: 1.5rem;
 }
 
-.scanner-video-wrapper {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 16px;
-  overflow: hidden;
-  background: #000;
-}
-
-.scanner-video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.scanner-frame {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 70%;
-  height: 70%;
-  border: 3px solid #00ff00;
-  border-radius: 12px;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-  pointer-events: none;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    border-color: #00ff00;
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 255, 0, 0.5);
-  }
-  50% {
-    border-color: #00cc00;
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 255, 0, 0.8);
-  }
-}
-
-.scanner-hint {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 1rem;
-  margin: 0;
-  padding: 0 1rem;
+.close-scanner-button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 </style>
