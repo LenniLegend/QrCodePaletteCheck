@@ -383,17 +383,44 @@ const searchBarcode = async () => {
 .search-button {
   padding: 0.75rem 2rem;
   font-weight: 600;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transition: all 0.2s ease;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.search-button:hover {
+/* Höhere Spezifität für PrimeVue Button-Elemente */
+.p-button.search-button,
+.search-button.p-button {
+  background-color: #002E62 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(0, 46, 98, 0.95) !important;
+  box-shadow: 0 6px 18px rgba(0, 46, 98, 0.18) !important;
+}
+
+.p-button.search-button .p-button-icon,
+.search-button.p-button .p-button-icon,
+.p-button.search-button .pi,
+.search-button.p-button .pi {
+  color: #ffffff !important;
+}
+
+.p-button.search-button:hover,
+.search-button.p-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  background-color: #00407a !important;
+  border-color: rgba(0, 64, 122, 0.95) !important;
+  box-shadow: 0 8px 24px rgba(0, 46, 98, 0.25) !important;
+}
+
+.search-button:disabled,
+.search-button[disabled],
+.p-button.search-button:disabled,
+.p-button.search-button[disabled] {
+  opacity: 0.65;
+  cursor: not-allowed;
+  box-shadow: none !important;
 }
 
 .w-full {
