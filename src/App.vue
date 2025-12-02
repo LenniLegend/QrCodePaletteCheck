@@ -23,19 +23,53 @@ const API_BASE_URL = '/api/barcode';
 
 const version = __APP_VERSION__;
 
+// Prüfe ob wir HTTPS haben oder localhost (für getUserMedia erforderlich auf iOS)
+const isSecureContext = window.isSecureContext || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+// Prüfe ob iOS Safari
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
 // QR-Code Scanner Funktion
 const scanQRCode = async () => {
   error.value = null;
   
-  // Prüfe zuerst, ob Kamera verfügbar ist
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    error.value = 'Kamera-Zugriff wird von diesem Browser nicht unterstützt.';
+  // Für iOS ohne HTTPS oder wenn getUserMedia nicht verfügbar: verwende File Input
+  if (isIOS && (!isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
+    // File Input für iOS - öffnet native Kamera
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    
+    input.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      try {
+        // QR-Code aus Bild scannen
+        const result = await QrScanner.scanImage(file, { 
+          returnDetailedScanResult: true 
+        });
+        barcode.value = result.data;
+        await searchBarcode();
+      } catch (err) {
+        console.error('QR scan error:', err);
+        error.value = 'Kein QR-Code im Bild gefunden. Bitte versuche es erneut.';
+      }
+    };
+    
+    input.click();
     return;
   }
   
-  // Zeige Scanner UI erst nach erfolgreichem Kamera-Zugriff
+  // Für moderne Browser mit HTTPS: verwende Live-Scanner
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    error.value = 'Kamera-Zugriff nicht verfügbar. Bitte verwende HTTPS.';
+    return;
+  }
+  
   try {
-    // Teste Kamera-Zugriff explizit - löst iOS-Berechtigung aus
+    // Teste Kamera-Zugriff explizit - löst Berechtigung aus
     const stream = await navigator.mediaDevices.getUserMedia({ 
       video: { facingMode: 'environment' } 
     });
