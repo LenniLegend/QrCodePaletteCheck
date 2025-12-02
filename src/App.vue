@@ -1,11 +1,12 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onUnmounted } from 'vue';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Card from 'primevue/card';
 import Message from 'primevue/message';
 import ProgressSpinner from 'primevue/progressspinner';
 import FloatLabel from 'primevue/floatlabel';
+import QrScanner from 'qr-scanner';
 
 // Reaktive Variablen
 const barcode = ref('');
@@ -13,6 +14,8 @@ const result = ref(null);
 const error = ref(null);
 const loading = ref(false);
 const searched = ref(false); // Um "Kein Eintrag gefunden" nur nach Suche anzuzeigen
+const showScanner = ref(false);
+let qrScanner = null;
 
 // API-Konfiguration
 // Wir nutzen nun den Proxy (in vite.config.js oder nginx.conf), um CORS-Fehler zu vermeiden
@@ -22,85 +25,56 @@ const version = __APP_VERSION__;
 
 // QR-Code Scanner Funktion
 const scanQRCode = async () => {
+  showScanner.value = true;
+  error.value = null;
+  
+  // Warte kurz, damit das Video-Element im DOM ist
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  const videoElement = document.getElementById('qr-video');
+  if (!videoElement) {
+    error.value = 'Scanner konnte nicht initialisiert werden.';
+    showScanner.value = false;
+    return;
+  }
+  
   try {
-    // Prüfe ob Browser die API unterstützt
-    if (!('BarcodeDetector' in window)) {
-      // Fallback: Öffne File Input für Kamera
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.capture = 'environment'; // Rückkamera verwenden
-      
-      input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = async (event) => {
-            const img = new Image();
-            img.src = event.target.result;
-            img.onload = async () => {
-              // Versuche mit BarcodeDetector API (falls verfügbar)
-              if ('BarcodeDetector' in window) {
-                try {
-                  const barcodeDetector = new BarcodeDetector();
-                  const barcodes = await barcodeDetector.detect(img);
-                  if (barcodes.length > 0) {
-                    barcode.value = barcodes[0].rawValue;
-                    await searchBarcode();
-                  } else {
-                    error.value = 'Kein QR-Code oder Barcode gefunden. Bitte erneut versuchen.';
-                  }
-                } catch (err) {
-                  error.value = 'Fehler beim Scannen. Bitte Code manuell eingeben.';
-                }
-              } else {
-                error.value = 'QR-Code-Scan wird von diesem Browser nicht unterstützt. Bitte Code manuell eingeben.';
-              }
-            };
-          };
-          reader.readAsDataURL(file);
-        }
-      };
-      
-      input.click();
-      return;
-    }
-    
-    // Native BarcodeDetector API verwenden
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-      video: { facingMode: 'environment' } 
-    });
-    
-    // Video-Element erstellen für Kamera-Feed
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.play();
-    
-    const barcodeDetector = new BarcodeDetector();
-    
-    // Kontinuierlich nach Barcodes suchen
-    const detectCode = async () => {
-      try {
-        const barcodes = await barcodeDetector.detect(video);
-        if (barcodes.length > 0) {
-          barcode.value = barcodes[0].rawValue;
-          stream.getTracks().forEach(track => track.stop());
-          await searchBarcode();
-        } else {
-          requestAnimationFrame(detectCode);
-        }
-      } catch (err) {
-        console.error('Scan error:', err);
+    qrScanner = new QrScanner(
+      videoElement,
+      result => {
+        barcode.value = result.data;
+        stopScanner();
+        searchBarcode();
+      },
+      {
+        returnDetailedScanResult: true,
+        highlightScanRegion: true,
+        highlightCodeOutline: true,
+        preferredCamera: 'environment'
       }
-    };
+    );
     
-    detectCode();
-    
+    await qrScanner.start();
   } catch (err) {
-    console.error('Camera error:', err);
+    console.error('Scanner error:', err);
     error.value = 'Kamera-Zugriff verweigert oder nicht verfügbar.';
+    showScanner.value = false;
   }
 };
+
+const stopScanner = () => {
+  if (qrScanner) {
+    qrScanner.stop();
+    qrScanner.destroy();
+    qrScanner = null;
+  }
+  showScanner.value = false;
+};
+
+// Cleanup beim Unmount
+onUnmounted(() => {
+  stopScanner();
+});
 
 // Suchfunktion
 const searchBarcode = async () => {
@@ -255,6 +229,29 @@ const searchBarcode = async () => {
         </Message>
       </template>
     </Card>
+
+    <!-- QR-Code Scanner Overlay -->
+    <div v-if="showScanner" class="scanner-overlay" @click.self="stopScanner">
+      <div class="scanner-container">
+        <div class="scanner-header">
+          <h3>QR-Code scannen</h3>
+          <Button 
+            icon="pi pi-times" 
+            @click="stopScanner" 
+            class="close-scanner-button"
+            text
+            rounded
+            severity="secondary"
+          />
+        </div>
+        <div class="scanner-video-wrapper">
+          <video id="qr-video" class="scanner-video"></video>
+          <div class="scanner-frame"></div>
+        </div>
+        <p class="scanner-hint">Halte den QR-Code in den Rahmen</p>
+      </div>
+    </div>
+
     <div class="version-display">
       <i class="pi pi-tag"></i>
       v{{ version }}
@@ -691,5 +688,93 @@ const searchBarcode = async () => {
   .item-value {
     text-align: left;
   }
+}
+
+/* QR-Code Scanner Overlay */
+.scanner-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.scanner-container {
+  width: 90%;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.scanner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1rem;
+}
+
+.scanner-header h3 {
+  color: white;
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.close-scanner-button {
+  color: white !important;
+}
+
+.scanner-video-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+}
+
+.scanner-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scanner-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 70%;
+  height: 70%;
+  border: 3px solid #00ff00;
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    border-color: #00ff00;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 255, 0, 0.5);
+  }
+  50% {
+    border-color: #00cc00;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 255, 0, 0.8);
+  }
+}
+
+.scanner-hint {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1rem;
+  margin: 0;
+  padding: 0 1rem;
 }
 </style>
