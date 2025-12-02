@@ -25,20 +25,38 @@ const version = __APP_VERSION__;
 
 // QR-Code Scanner Funktion
 const scanQRCode = async () => {
-  showScanner.value = true;
   error.value = null;
   
-  // Warte kurz, damit das Video-Element im DOM ist
-  await new Promise(resolve => setTimeout(resolve, 100));
-  
-  const videoElement = document.getElementById('qr-video');
-  if (!videoElement) {
-    error.value = 'Scanner konnte nicht initialisiert werden.';
-    showScanner.value = false;
+  // Prüfe zuerst, ob Kamera verfügbar ist
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    error.value = 'Kamera-Zugriff wird von diesem Browser nicht unterstützt.';
     return;
   }
   
+  // Zeige Scanner UI erst nach erfolgreichem Kamera-Zugriff
   try {
+    // Teste Kamera-Zugriff explizit - löst iOS-Berechtigung aus
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { facingMode: 'environment' } 
+    });
+    
+    // Stoppe Test-Stream sofort wieder
+    stream.getTracks().forEach(track => track.stop());
+    
+    // Jetzt Scanner UI anzeigen
+    showScanner.value = true;
+    
+    // Warte kurz, damit das Video-Element im DOM ist
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
+    const videoElement = document.getElementById('qr-video');
+    if (!videoElement) {
+      error.value = 'Scanner konnte nicht initialisiert werden.';
+      showScanner.value = false;
+      return;
+    }
+    
+    // QR Scanner initialisieren
     qrScanner = new QrScanner(
       videoElement,
       result => {
@@ -50,15 +68,25 @@ const scanQRCode = async () => {
         returnDetailedScanResult: true,
         highlightScanRegion: true,
         highlightCodeOutline: true,
-        preferredCamera: 'environment'
+        preferredCamera: 'environment',
+        maxScansPerSecond: 5
       }
     );
     
     await qrScanner.start();
   } catch (err) {
     console.error('Scanner error:', err);
-    error.value = 'Kamera-Zugriff verweigert oder nicht verfügbar.';
     showScanner.value = false;
+    
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      error.value = 'Kamera-Zugriff wurde verweigert. Bitte erlaube den Zugriff in den Einstellungen.';
+    } else if (err.name === 'NotFoundError') {
+      error.value = 'Keine Kamera gefunden.';
+    } else if (err.name === 'NotReadableError') {
+      error.value = 'Kamera wird bereits verwendet.';
+    } else {
+      error.value = 'Kamera konnte nicht gestartet werden: ' + (err.message || 'Unbekannter Fehler');
+    }
   }
 };
 
