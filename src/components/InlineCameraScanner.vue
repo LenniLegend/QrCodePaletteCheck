@@ -74,12 +74,25 @@ export default {
           html5El.value.id = id
           html5Scanner = new Html5Qrcode(id)
 
-          // Try multiple camera configs to avoid OverconstrainedError on some devices
+          // Try to get available cameras first
+          let cameraId = null
+          try {
+            const devices = await Html5Qrcode.getCameras()
+            if (devices && devices.length > 0) {
+              // Prefer back camera (environment facing)
+              const backCamera = devices.find(d => d.label && d.label.toLowerCase().includes('back'))
+              cameraId = backCamera ? backCamera.id : devices[0].id
+            }
+          } catch (e) {
+            console.warn('Could not enumerate cameras:', e)
+          }
+
+          // Try multiple camera configs
           const configs = [
-            { facingMode: 'environment' },
-            // older or picky browsers may prefer no facingMode
-            undefined
-          ]
+            cameraId, // specific camera ID if found
+            { facingMode: 'environment' }, // constraint object
+            { facingMode: { exact: 'environment' } } // exact constraint
+          ].filter(c => c !== null)
 
           let started = false
           let lastErr = null
