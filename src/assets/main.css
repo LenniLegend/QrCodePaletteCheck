@@ -1,0 +1,8 @@
+@import 'primeicons/primeicons.css';
+
+body {
+    margin: 0;
+    font-family: var(--p-font-family);
+    background-color: var(--p-surface-50);
+    color: var(--p-text-color);
+}
