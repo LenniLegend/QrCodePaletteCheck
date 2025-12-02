@@ -41,11 +41,20 @@ const searchBarcode = async () => {
         throw new Error(`API Fehler: ${response.statusText} (${response.status})`);
       }
     } else {
-      const data = await response.json();
-      // Prüfen ob Daten vorhanden sind
-      // Wir nehmen an, dass die API ein Objekt zurückgibt. Wenn es leer ist oder null, wurde nichts gefunden.
-      if (data && Object.keys(data).length > 0) {
-        result.value = data;
+      const json = await response.json();
+      // Erwartetes Format laut API:
+      // { data: { artikel, auftrag, barcode, id, menge, timestamp }, found: true }
+      // Wir mappen auf ein flaches Objekt für die Anzeige und trimmen den Barcode (\r am Ende).
+      if (json && json.found && json.data) {
+        const d = json.data;
+        result.value = {
+          barcode: (d.barcode || '').trim(),
+          auftrag: d.auftrag ?? null,
+          artikel: d.artikel ?? null,
+          menge: d.menge ?? null,
+          timestamp: d.timestamp ?? null,
+          id: d.id ?? null,
+        };
       } else {
         result.value = null;
       }

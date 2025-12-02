@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 // Hardcoded version to avoid import issues, or we could read package.json
-const appVersion = '0.1.1'
+const appVersion = '0.1.2'
 
 // https://vitejs.dev/config/
 export default defineConfig({
