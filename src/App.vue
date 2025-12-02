@@ -81,14 +81,14 @@ const searchBarcode = async () => {
         <i class="pi pi-qrcode logo-icon"></i>
       </div>
       <h1 class="main-title">Barcode Check</h1>
-      <p class="main-subtitle">Schnell und einfach Barcode-Informationen abrufen</p>
+      <p class="main-subtitle">QR-Code Klammer scannen um zu erfahren, was auf der Palette geladen ist.</p>
     </div>
 
     <Card class="search-card glass-effect">
       <template #content>
         <div class="search-form">
           <div class="input-group">
-            <FloatLabel>
+            <FloatLabel class="input-wrapper">
                 <InputText 
                   id="barcode" 
                   v-model="barcode" 
@@ -98,6 +98,16 @@ const searchBarcode = async () => {
                 />
                 <label for="barcode">Barcode eingeben</label>
             </FloatLabel>
+            <Button 
+              v-if="barcode"
+              icon="pi pi-times" 
+              @click="barcode = ''; result = null; error = null; searched = false"
+              class="clear-button"
+              text
+              rounded
+              severity="secondary"
+              :disabled="loading"
+            />
           </div>
           <Button 
             label="Suchen" 
@@ -205,7 +215,9 @@ const searchBarcode = async () => {
   align-items: center;
   min-height: 100vh;
   padding: 2rem 1rem 3rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: 
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6)),
+    url('@/assets/background.png') center center / cover no-repeat fixed;
   position: relative;
   overflow: hidden;
 }
@@ -223,9 +235,10 @@ const searchBarcode = async () => {
 .shape {
   position: absolute;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(15px);
   animation: float 6s ease-in-out infinite;
+  box-shadow: 0 8px 32px rgba(255, 255, 255, 0.1);
 }
 
 .shape-1 {
@@ -266,8 +279,8 @@ const searchBarcode = async () => {
 .logo-icon {
   font-size: 4rem;
   color: white;
-  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-  animation: float 3s ease-in-out infinite;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3);
+  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
 }
 
 .main-title {
@@ -275,30 +288,32 @@ const searchBarcode = async () => {
   font-weight: 700;
   color: white;
   margin: 0.5rem 0;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
   letter-spacing: -0.5px;
 }
 
 .main-subtitle {
   font-size: 1.1rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.95);
   margin: 0;
   font-weight: 400;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
 .version-display {
   margin-top: 2rem;
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.95);
   display: flex;
   align-items: center;
   gap: 0.5rem;
   z-index: 1;
   padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(15px);
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.2);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 .search-card {
@@ -309,27 +324,38 @@ const searchBarcode = async () => {
 }
 
 .glass-effect {
-  background: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(20px);
-  border-radius: 20px !important;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(30px) saturate(180%);
+  border-radius: 24px !important;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
 }
 
 .search-form {
   display: flex;
   gap: 1rem;
   margin-bottom: 0;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .input-group {
   flex: 1;
+  display: flex;
+  align-items: center;
+  position: relative;
+  gap: 0.5rem;
+}
+
+.input-wrapper {
+  flex: 1;
+  display: flex;
 }
 
 .modern-input {
   font-size: 1.05rem;
   transition: all 0.3s ease;
+  height: 100%;
+  padding-right: 3rem;
 }
 
 .modern-input:hover:not(:disabled) {
@@ -337,11 +363,32 @@ const searchBarcode = async () => {
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
 }
 
+.clear-button {
+  position: absolute;
+  right: 0.5rem;
+  z-index: 10;
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  padding: 0;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.clear-button:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
 .search-button {
   padding: 0.75rem 2rem;
   font-weight: 600;
   transition: all 0.3s ease;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .search-button:hover {
@@ -388,10 +435,11 @@ const searchBarcode = async () => {
 }
 
 .result-container {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
   border-radius: 16px;
   padding: 1.5rem;
-  border: 1px solid rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.15);
+  backdrop-filter: blur(10px);
 }
 
 .result-header {
@@ -424,17 +472,19 @@ const searchBarcode = async () => {
   justify-content: space-between;
   align-items: center;
   padding: 1.25rem;
-  background: white;
+  background: rgba(255, 255, 255, 0.98);
   border-radius: 12px;
-  border: 1px solid rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.12);
   transition: all 0.3s ease;
   animation: slideIn 0.5s ease-out backwards;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .grid-item:hover {
   transform: translateX(5px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-  border-color: rgba(102, 126, 234, 0.3);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.2);
+  border-color: rgba(102, 126, 234, 0.4);
+  background: rgba(255, 255, 255, 1);
 }
 
 .item-label {
