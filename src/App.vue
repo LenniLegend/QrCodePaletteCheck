@@ -20,6 +20,88 @@ const API_BASE_URL = '/api/barcode';
 
 const version = __APP_VERSION__;
 
+// QR-Code Scanner Funktion
+const scanQRCode = async () => {
+  try {
+    // Prüfe ob Browser die API unterstützt
+    if (!('BarcodeDetector' in window)) {
+      // Fallback: Öffne File Input für Kamera
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = 'environment'; // Rückkamera verwenden
+      
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = async () => {
+              // Versuche mit BarcodeDetector API (falls verfügbar)
+              if ('BarcodeDetector' in window) {
+                try {
+                  const barcodeDetector = new BarcodeDetector();
+                  const barcodes = await barcodeDetector.detect(img);
+                  if (barcodes.length > 0) {
+                    barcode.value = barcodes[0].rawValue;
+                    await searchBarcode();
+                  } else {
+                    error.value = 'Kein QR-Code oder Barcode gefunden. Bitte erneut versuchen.';
+                  }
+                } catch (err) {
+                  error.value = 'Fehler beim Scannen. Bitte Code manuell eingeben.';
+                }
+              } else {
+                error.value = 'QR-Code-Scan wird von diesem Browser nicht unterstützt. Bitte Code manuell eingeben.';
+              }
+            };
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+      
+      input.click();
+      return;
+    }
+    
+    // Native BarcodeDetector API verwenden
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { facingMode: 'environment' } 
+    });
+    
+    // Video-Element erstellen für Kamera-Feed
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.play();
+    
+    const barcodeDetector = new BarcodeDetector();
+    
+    // Kontinuierlich nach Barcodes suchen
+    const detectCode = async () => {
+      try {
+        const barcodes = await barcodeDetector.detect(video);
+        if (barcodes.length > 0) {
+          barcode.value = barcodes[0].rawValue;
+          stream.getTracks().forEach(track => track.stop());
+          await searchBarcode();
+        } else {
+          requestAnimationFrame(detectCode);
+        }
+      } catch (err) {
+        console.error('Scan error:', err);
+      }
+    };
+    
+    detectCode();
+    
+  } catch (err) {
+    console.error('Camera error:', err);
+    error.value = 'Kamera-Zugriff verweigert oder nicht verfügbar.';
+  }
+};
+
 // Suchfunktion
 const searchBarcode = async () => {
   if (!barcode.value.trim()) return;
@@ -109,6 +191,14 @@ const searchBarcode = async () => {
               :disabled="loading"
             />
           </div>
+          <Button 
+            icon="pi pi-camera" 
+            @click="scanQRCode" 
+            :disabled="loading"
+            class="camera-button mobile-only"
+            severity="secondary"
+            v-tooltip.top="'QR-Code scannen'"
+          />
           <Button 
             label="Suchen" 
             icon="pi pi-search" 
@@ -421,6 +511,32 @@ const searchBarcode = async () => {
   opacity: 0.65;
   cursor: not-allowed;
   box-shadow: none !important;
+}
+
+.camera-button {
+  padding: 0.75rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  height: 100%;
+  min-width: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-button:hover {
+  transform: translateY(-2px);
+}
+
+/* Kamera-Button nur auf mobilen Geräten anzeigen */
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: flex;
+  }
 }
 
 .w-full {
