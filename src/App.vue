@@ -18,6 +18,8 @@ const searched = ref(false); // Um "Kein Eintrag gefunden" nur nach Suche anzuze
 // Wir nutzen nun den Proxy (in vite.config.js oder nginx.conf), um CORS-Fehler zu vermeiden
 const API_BASE_URL = '/api/barcode';
 
+const version = __APP_VERSION__;
+
 // Suchfunktion
 const searchBarcode = async () => {
   if (!barcode.value.trim()) return;
@@ -115,17 +117,26 @@ const searchBarcode = async () => {
         </Message>
       </template>
     </Card>
+    <div class="version-display">v{{ version }}</div>
   </div>
 </template>
 
 <style scoped>
 .app-container {
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
   min-height: 100vh;
   padding-top: 4rem;
   background-color: var(--p-surface-100);
+}
+
+.version-display {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  color: var(--p-text-color-secondary);
+  opacity: 0.7;
 }
 
 .search-card {

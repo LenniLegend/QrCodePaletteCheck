@@ -2,8 +2,14 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
+// Hardcoded version to avoid import issues, or we could read package.json
+const appVersion = '0.1.1'
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  define: {
+    '__APP_VERSION__': JSON.stringify(appVersion)
+  },
   plugins: [
     vue(),
   ],
